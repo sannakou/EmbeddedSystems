@@ -1,9 +1,22 @@
 / {
     aliases {
-        sw0 = &button0;
-        sw1 = &button1;
-        sw2 = &button2;
-        sw3 = &button3;
-        sw4 = &button4;
+        led0 = &rgb1_red;    /* punainen */
+        led1 = &rgb1_green;  /* vihreä */
+        led2 = &rgb1_blue;   /* sininen */
     };
+};
+
+&rgb1_red {
+    status = "okay";
+    gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
+};
+
+&rgb1_green {
+    status = "okay";
+    gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>;
+};
+
+&rgb1_blue {
+    status = "okay";
+    gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
 };

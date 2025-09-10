@@ -1,31 +1,35 @@
-/* 
-Tavoitteena korkein pistemäärä, eli koodissa toimii 
-1 napissa kaikkien värien vilkutus ja pause, 
-2 napissa unainen valo päälle/pois,
-3 napissa keltainen valo päälle/pois
-4 napissa vihreä valo päälle/pois
-5 napissa keltaisen valon vilkutus päälle/pois
-*/
-
-#include "leds.h"
-#include "buttons.h"
 #include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include "leds.h"
+
+// Task prototypes
+void uart_receiver_task(void *, void *, void *);
+void dispatcher_task(void *, void *, void *);
 
 #define STACKSIZE 500
 #define PRIORITY 5
 
-//LED threads
-K_THREAD_DEFINE(red_thread, STACKSIZE, red_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
-K_THREAD_DEFINE(yellow_thread, STACKSIZE, yellow_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
-K_THREAD_DEFINE(green_thread, STACKSIZE, green_led_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(uart_thread, STACKSIZE, uart_receiver_task, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(dispatcher_thread, STACKSIZE, dispatcher_task, NULL, NULL, NULL, PRIORITY, 0, 0);
 
-int main(void)
-{
-    init_led();
-    button_init();
-
-    while (1) {
-        k_sleep(K_FOREVER);
+int main(void) {
+    if (init_led() != 0) {
+        printk("LED init failed\n");
+        return -1;
     }
+
+    if (init_uart() != 0) {
+        printk("UART init failed\n");
+        return -1;
+    }
+
+    printk("Traffic light sequence started\n");
+
+    // Test: vapautetaan semafori manuaalisesti (voit tehdä myös napilla)
+    while (1) {
+        k_msleep(1000);
+        k_sem_give(&release_sem); // vapauttaa yhden merkin käsittelyn
+    }
+
     return 0;
 }
