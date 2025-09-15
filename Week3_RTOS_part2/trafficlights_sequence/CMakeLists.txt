@@ -6,6 +6,7 @@ project(trafficlights_sequence)
 target_sources(app PRIVATE
     src/main.c
     src/leds.c
+    src/buttons.c
     src/uart_dispatcher.c
 )
 

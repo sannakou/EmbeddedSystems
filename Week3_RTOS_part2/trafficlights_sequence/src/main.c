@@ -1,10 +1,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include "leds.h"
+#include "buttons.h"
 
 extern int init_uart(void);
 
-void main(void) {
+int main(void) {
     printk("System start\n");
 
     if (init_led() != 0) {
@@ -13,10 +14,13 @@ void main(void) {
     if (init_uart() != 0) {
         printk("UART init failed\n");
     }
-
-    /* Testiksi annetaan release 1s välein → dispatcher etenee sekvenssissä */
-    while (1) {
-        k_msleep(1000);
-        k_sem_give(&release_sem);
+    if (init_buttons() != 0) {
+        printk("Button init failed\n");
     }
+
+    while (1) {
+        k_msleep(1000); // pääloop ei tee muuta
+    }
+
+    return 0;
 }

@@ -1,22 +1,26 @@
 / {
     aliases {
-        led0 = &rgb1_red;    /* punainen */
-        led1 = &rgb1_green;  /* vihreä */
-        led2 = &rgb1_blue;   /* sininen */
+        led0 = &rgb1_red;    
+        led1 = &rgb1_green;  
+        led2 = &rgb1_blue;   
+
+        sw0 = &button_red;
+        sw1 = &button_green;
+        sw2 = &button_yellow;
     };
 };
 
-&rgb1_red {
+&button_red {
     status = "okay";
-    gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
+    gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>; /* Muokkaa pinnit laitteesi mukaan */
 };
 
-&rgb1_green {
+&button_green {
     status = "okay";
-    gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>;
+    gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;
 };
 
-&rgb1_blue {
+&button_yellow {
     status = "okay";
-    gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+    gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 };

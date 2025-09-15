@@ -1,23 +1,24 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/drivers/uart.h>
-#include <string.h>
 #include "leds.h"
+#include "buttons.h"
+#include <string.h>
 
-#define UART_MSG_MAX_LEN  20
-#define STACKSIZE         700
-#define PRIORITY          5
+#define STACKSIZE 700
+#define PRIORITY  5
 
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-/* FIFO viestien välitykseen */
-K_FIFO_DEFINE(dispatcher_fifo);
-
+/* Dispatcher FIFO data */
 struct data_t {
     void *fifo_reserved;
-    char msg[UART_MSG_MAX_LEN];
+    char msg;
 };
+
+/* Dispatcher FIFO */
+K_FIFO_DEFINE(dispatcher_fifo);
 
 /* UART init */
 int init_uart(void) {
@@ -28,34 +29,19 @@ int init_uart(void) {
     return 0;
 }
 
-/* UART vastaanottosäie */
+/* UART task */
 static void uart_task(void *a, void *b, void *c) {
     char rc;
-    char uart_msg[UART_MSG_MAX_LEN];
-    int idx = 0;
-
-    memset(uart_msg, 0, sizeof(uart_msg));
-
     while (1) {
         if (uart_poll_in(uart_dev, &rc) == 0) {
-            if (rc == '\r' || rc == '\n') {
-                if (idx > 0) {
-                    struct data_t *buf = k_malloc(sizeof(*buf));
-                    if (buf) {
-                        strncpy(buf->msg, uart_msg, sizeof(buf->msg) - 1);
-                        buf->msg[sizeof(buf->msg) - 1] = '\0';
-                        k_fifo_put(&dispatcher_fifo, buf);
-                        printk("UART msg queued: %s\n", buf->msg);
-                    }
-                    idx = 0;
-                    memset(uart_msg, 0, sizeof(uart_msg));
+            if (rc == 'R' || rc == 'G' || rc == 'Y') {
+                struct data_t *buf = k_malloc(sizeof(*buf));
+                if (buf) {
+                    buf->msg = rc;
+                    k_fifo_put(get_button_fifo(), buf);
+                    k_sem_give(&dispatcher_sem);
+                    printk("UART msg queued: %c\n", buf->msg);
                 }
-            } else if (idx < (UART_MSG_MAX_LEN - 1)) {
-                uart_msg[idx++] = rc;
-            } else {
-                printk("uart_task: message too long, dropped\n");
-                idx = 0;
-                memset(uart_msg, 0, sizeof(uart_msg));
             }
         } else {
             k_msleep(5);
@@ -63,46 +49,37 @@ static void uart_task(void *a, void *b, void *c) {
     }
 }
 
-/* Dispatcher-säie */
+/* Dispatcher task */
 static void dispatcher_task(void *a, void *b, void *c) {
     while (1) {
-        struct data_t *rec = k_fifo_get(&dispatcher_fifo, K_FOREVER);
-        if (!rec) continue;
+        k_sem_take(&dispatcher_sem, K_FOREVER);
 
-        printk("Dispatcher got: %s\n", rec->msg);
-
-        for (size_t i = 0; i < strlen(rec->msg); i++) {
-            char ch = rec->msg[i];
-            k_sem_take(&release_sem, K_FOREVER);
-
-            switch (ch) {
+        struct data_t *rec;
+        while ((rec = k_fifo_get(get_button_fifo(), K_NO_WAIT)) != NULL) {
+            switch (rec->msg) {
             case 'R':
                 gpio_pin_set_dt(&red, 1);
-                printk("punainen sytytetty\n");
                 k_msleep(500);
                 gpio_pin_set_dt(&red, 0);
                 break;
             case 'G':
                 gpio_pin_set_dt(&green, 1);
-                printk("vihreä sytytetty\n");
                 k_msleep(500);
                 gpio_pin_set_dt(&green, 0);
                 break;
             case 'Y':
                 gpio_pin_set_dt(&red, 1);
                 gpio_pin_set_dt(&green, 1);
-                printk("keltainen sytytetty\n");
                 k_msleep(500);
                 gpio_pin_set_dt(&red, 0);
                 gpio_pin_set_dt(&green, 0);
                 break;
             default:
-                printk("Unknown character: %c\n", ch);
+                printk("Unknown character: %c\n", rec->msg);
                 break;
             }
+            k_free(rec);
         }
-
-        k_free(rec);
     }
 }
 
