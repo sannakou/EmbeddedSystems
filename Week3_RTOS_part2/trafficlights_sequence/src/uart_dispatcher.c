@@ -7,21 +7,18 @@
 #include "leds.h"
 #include "buttons.h"
 
-#define DEBUG 1   /* Vaihda 0 jos haluat poistaa debug-viestit */
-
-#if DEBUG
-#define DBG_PRINTK(...) printk(__VA_ARGS__)
-#else
-#define DBG_PRINTK(...) do {} while (0)
-#endif
-
-
 #define STACKSIZE 700
 #define PRIORITY  5
 #define UART_MSG_MAX_LEN 64
 
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
+
+/* Debug-lippu */
+static bool debug_enabled = true;
+
+#define DBG_PRINTK(...) \
+    do { if (debug_enabled) printk(__VA_ARGS__); } while (0)
 
 /* Dispatcher FIFO data */
 struct data_t {
@@ -56,9 +53,18 @@ static void uart_task(void *a, void *b, void *c) {
                     if (buf) {
                         strncpy(buf->msg, uart_buf, sizeof(buf->msg) - 1);
                         buf->msg[sizeof(buf->msg) - 1] = '\0';
-                        k_fifo_put(get_button_fifo(), buf);
-                        k_sem_give(&dispatcher_sem);
-                        printk("UART seq queued: %s\n", buf->msg);
+
+                        /* Tarkista onko komento debugille */
+                        if (buf->msg[0] == 'D') {
+                            if (buf->msg[1] == '1') debug_enabled = true;
+                            else if (buf->msg[1] == '0') debug_enabled = false;
+                            printk("Debug mode %s\n", debug_enabled ? "ON" : "OFF");
+                            k_free(buf);
+                        } else {
+                            k_fifo_put(get_button_fifo(), buf);
+                            k_sem_give(&dispatcher_sem);
+                            printk("UART seq queued: %s\n", buf->msg);
+                        }
                     }
                     idx = 0;
                     memset(uart_buf, 0, sizeof(uart_buf));
@@ -79,6 +85,9 @@ static void uart_task(void *a, void *b, void *c) {
 /* Dispatcher task */
 static void dispatcher_task(void *a, void *b, void *c) {
     while (1) {
+        /* Aloitushetki koko sekvenssin käsittelylle */
+        uint64_t total_start_us = k_uptime_get() * 1000ULL;
+
         k_sem_take(&dispatcher_sem, K_FOREVER);
 
         struct data_t *rec;
@@ -92,13 +101,16 @@ static void dispatcher_task(void *a, void *b, void *c) {
                 if (repeat <= 0) repeat = 1;
             }
 
+            /* Aloitushetki yksittäiselle sekvenssille */
+            uint64_t seq_start_us = k_uptime_get() * 1000ULL;
+
             for (int r = 0; r < repeat; r++) {
-                uint64_t seq_total = 0;
+                uint64_t seq_total_us = 0;
 
                 for (size_t i = 0; i < strlen(rec->msg); i++) {
                     char ch = rec->msg[i];
 
-                    /* Aloitushetki */
+                    /* Aloitushetki yksittäiselle valotehtävälle */
                     uint32_t start = k_cycle_get_32();
 
                     switch (ch) {
@@ -127,19 +139,27 @@ static void dispatcher_task(void *a, void *b, void *c) {
                         break;
                     }
 
-                    /* Loppuhetki */
+                    /* Loppuhetki yksittäiselle valotehtävälle */
                     uint32_t end = k_cycle_get_32();
                     uint64_t dur_us = k_cyc_to_us_floor64(end - start);
-                    seq_total += dur_us;
+                    seq_total_us += dur_us;
 
                     printk("Task %c duration: %llu us\n", ch, dur_us);
                 }
 
-                printk("Sequence total duration: %llu us\n", seq_total);
+                printk("Sequence total duration: %llu us\n", seq_total_us);
             }
+
+            /* Sekvenssin käsittelyaika dispatcherissa */
+            uint64_t seq_end_us = k_uptime_get() * 1000ULL;
+            printk("Processing time for sequence '%s': %llu us\n", rec->msg, seq_end_us - seq_start_us);
 
             k_free(rec);
         }
+
+        /* Kokonaisaika odotuksesta ja käsittelystä */
+        uint64_t total_end_us = k_uptime_get() * 1000ULL;
+        printk("Total elapsed time for all sequences: %llu us\n", total_end_us - total_start_us);
     }
 }
 

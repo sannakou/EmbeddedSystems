@@ -7,10 +7,12 @@ VKO 3. Tavoitteena korkein pistemäärä, eli koodissa toimii
 
 VKO 4. Tavoitteena korkein pistemäärä, eli koodissa toimii
 1. Ajoitukset liikennevaloihin
-2.
-3.
+2. Lisäominaisuuksina ajoituksiin myös sekvenssin käsittelyaika mainissa
+ja kaikkien sekvenssien kokonaiskeston
+3. Debugin kytkeminen päälle ja pois sarjaportin kautta komeinnoilla D0 ja D1.
 
 */
+
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include "leds.h"
