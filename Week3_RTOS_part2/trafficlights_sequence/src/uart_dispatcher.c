@@ -1,10 +1,20 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/timing/timing.h>
 #include <stdlib.h>
 #include <string.h>
 #include "leds.h"
 #include "buttons.h"
+
+#define DEBUG 1   /* Vaihda 0 jos haluat poistaa debug-viestit */
+
+#if DEBUG
+#define DBG_PRINTK(...) printk(__VA_ARGS__)
+#else
+#define DBG_PRINTK(...) do {} while (0)
+#endif
+
 
 #define STACKSIZE 700
 #define PRIORITY  5
@@ -77,26 +87,35 @@ static void dispatcher_task(void *a, void *b, void *c) {
             int repeat = 1;
 
             if (sep != NULL) {
-                *sep = '\0'; // erotellaan sekvenssi ja toisto
+                *sep = '\0';
                 repeat = atoi(sep + 1);
                 if (repeat <= 0) repeat = 1;
             }
 
             for (int r = 0; r < repeat; r++) {
+                uint64_t seq_total = 0;
+
                 for (size_t i = 0; i < strlen(rec->msg); i++) {
                     char ch = rec->msg[i];
+
+                    /* Aloitushetki */
+                    uint32_t start = k_cycle_get_32();
+
                     switch (ch) {
                     case 'R':
+                        DBG_PRINTK("Sytytetään punainen\n");
                         gpio_pin_set_dt(&red, 1);
                         k_msleep(500);
                         gpio_pin_set_dt(&red, 0);
                         break;
                     case 'G':
+                        DBG_PRINTK("Sytytetään vihreä\n");
                         gpio_pin_set_dt(&green, 1);
                         k_msleep(500);
                         gpio_pin_set_dt(&green, 0);
                         break;
                     case 'Y':
+                        DBG_PRINTK("Sytytetään keltainen\n");
                         gpio_pin_set_dt(&red, 1);
                         gpio_pin_set_dt(&green, 1);
                         k_msleep(500);
@@ -104,10 +123,19 @@ static void dispatcher_task(void *a, void *b, void *c) {
                         gpio_pin_set_dt(&green, 0);
                         break;
                     default:
-                        printk("Unknown character: %c\n", ch);
+                        DBG_PRINTK("Tuntematon merkki: %c\n", ch);
                         break;
                     }
+
+                    /* Loppuhetki */
+                    uint32_t end = k_cycle_get_32();
+                    uint64_t dur_us = k_cyc_to_us_floor64(end - start);
+                    seq_total += dur_us;
+
+                    printk("Task %c duration: %llu us\n", ch, dur_us);
                 }
+
+                printk("Sequence total duration: %llu us\n", seq_total);
             }
 
             k_free(rec);
